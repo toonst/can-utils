@@ -818,6 +818,7 @@ void print_snifline(int id){
 void writesettings(char* name){
 
 	int fd;
+	int write_size;
 	char fname[30] = SETFNAME;
 	int i,j;
 	char buf[8]= {0};
@@ -829,14 +830,16 @@ void writesettings(char* name){
 
 		for (i=0; i < 2048 ;i++) {
 			sprintf(buf, "<%03X>%c.", i, (is_set(i, ENABLE))?'1':'0');
-			write(fd, buf, 7);
+			write_size = write(fd, buf, 7);
 			for (j=0; j<8 ; j++){
 				sprintf(buf, "%02X", sniftab[i].notch.data[j]);
-				write(fd, buf, 2);
+				write_size = write(fd, buf, 2);
 			}
-			write(fd, "\n", 1);
+			write_size = write(fd, "\n", 1);
 			/* 7 + 16 + 1 = 24 bytes per entry */ 
 		}
+		if (write_size < 0)
+			printf("write failed");
 		close(fd);
 	}
 	else
