@@ -747,7 +747,7 @@ void print_snifline(int id){
 	
 	char* status_color = setColor(analyze_time(diffsec, diffusec));
 
-	printf("%ld.%06ld  %3X  ", diffsec, diffusec, id);
+	printf("%s%ld.%06ld  %3X  ",status_color , diffsec, diffusec, id);
 
 	if (binary) {
 
@@ -756,14 +756,14 @@ void print_snifline(int id){
 				if ((color) && (sniftab[id].marker.data[i] & 1<<j) &&
 				    (!(sniftab[id].notch.data[i] & 1<<j)))
 					if (sniftab[id].current.data[i] & 1<<j)
-						printf("%s1%s", ATTCOLOR, ATTRESET);
+						printf("%s%s1%s", status_color, ATTCOLOR, ATTRESET);
 					else
-						printf("%s0%s", ATTCOLOR, ATTRESET);
+						printf("%s%s0%s", status_color, ATTCOLOR, ATTRESET);
 				else
 					if (sniftab[id].current.data[i] & 1<<j)
-						putchar('1');
+						printf("%s1%s", status_color, ATTRESET);
 					else
-						putchar('0');
+						printf("%s0%s", status_color, ATTRESET);
 			}
 			if (binary_gap)
 				putchar(' ');
@@ -780,12 +780,12 @@ void print_snifline(int id){
 		}
 	}
 	else {
-
+		//print byte by byte
 		for (i=0; i<sniftab[id].current.can_dlc; i++)
 			if ((color) && (sniftab[id].marker.data[i]) && (!(sniftab[id].notch.data[i])))
-				printf("%s%02X%s ", ATTCOLOR, sniftab[id].current.data[i], ATTRESET);
+				printf("%s%s%02X %s", status_color, ATTCOLOR, sniftab[id].current.data[i], ATTRESET);
 			else
-				printf("%02X ", sniftab[id].current.data[i]);
+				printf("%s%02X %s", status_color, sniftab[id].current.data[i], ATTRESET);
 
 		if (sniftab[id].current.can_dlc < 8)
 			printf("%*s", (8 - sniftab[id].current.can_dlc) * 3, "");
@@ -809,6 +809,9 @@ void print_snifline(int id){
 	}
 
 	putchar('\n');
+	
+	//reset stdout color to default
+	printf("%s", ATTRESET);
 
 	U64_DATA(&sniftab[id].marker) = (__u64) 0;
 
