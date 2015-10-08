@@ -64,6 +64,7 @@
 #define FGMAGENTA "\33[35m"
 #define FGCYAN    "\33[36m"
 #define FGWHITE   "\33[37m"
+#define FGDEFAULT "\33[39m"
 
 /* background colors */
 
@@ -75,6 +76,7 @@
 #define BGMAGENTA "\33[45m"
 #define BGCYAN    "\33[46m"
 #define BGWHITE   "\33[47m"
+#define BGDEFAULT "\33[49m"
 
 /* cursor */
 

@@ -1,0 +1,4 @@
+[Project]
+Name=can_sniffer_v2
+Manager=KDevCustomMakeManager
+VersionControl=

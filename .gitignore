@@ -48,3 +48,5 @@ GNUmakefile.in
 
 /can-utils-*.tar.bz2
 /can-utils-*.tar.gz
+can_sniffer_v2
+
