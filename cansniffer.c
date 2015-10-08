@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <stdint.h>
 #include <string.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -120,6 +121,7 @@ static unsigned char binary;
 static unsigned char binary_gap;
 static unsigned char color;
 static char *interface;
+static uint64_t data_mask;
 
 void rx_setup (int fd, int id);
 void rx_delete (int fd, int id);
@@ -130,19 +132,27 @@ int handle_timeo(int fd, long currcms);
 void writesettings(char* name);
 void readsettings(char* name, int sockfd);
 
+/**
+ * HELP AT RUNTIME
+ */
 void print_usage(char *prg)
 {
 	const char manual [] = {
 		"commands that can be entered at runtime:\n"
 		"\n"
-		"q<ENTER>       - quit\n"
-		"b<ENTER>       - toggle binary / HEX-ASCII output\n"
-		"B<ENTER>       - toggle binary with gap / HEX-ASCII output (exceeds 80 chars!)\n"
-		"c<ENTER>       - toggle color mode\n"
-		"#<ENTER>       - notch currently marked/changed bits (can be used repeatedly)\n"
-		"*<ENTER>       - clear notched marked\n"
-		"rMYNAME<ENTER> - read settings file (filter/notch)\n"
-		"wMYNAME<ENTER> - write settings file (filter/notch)\n"
+		"q<ENTER>         - quit\n"
+		"b<ENTER>         - toggle binary / HEX-ASCII output\n"
+		"B<ENTER>         - toggle binary with gap / HEX-ASCII output (exceeds 80 chars!)\n"
+		"c<ENTER>         - toggle color mode\n"
+		"#<ENTER>         - notch currently marked/changed bits (can be used repeatedly)\n"
+		"*<ENTER>         - clear notched marked\n"
+		"rMYNAME<ENTER>   - read settings file (filter/notch)\n"
+		"wMYNAME<ENTER>   - write settings file (filter/notch)\n"
+		"dDATAMASK<ENTER> - set a mask to ignore data changes format:\n"
+		"\n"
+		"MASK example:\n"
+		"d00.FF.FF.FF.FF.FF.FF.FF -> ignores the first byte\n"
+		"\n"
 		"+FILTER<ENTER> - add CAN-IDs to sniff\n"
 		"-FILTER<ENTER> - remove CAN-IDs to sniff\n"
 		"\n"
@@ -287,6 +297,7 @@ int main(int argc, char **argv)
 
 	interface = argv[optind];
 
+	//Set up socket stream
 	if ((s = socket(PF_CAN, SOCK_DGRAM, CAN_BCM)) < 0) {
 		perror("socket");
 		return 1;
@@ -391,14 +402,32 @@ void rx_delete (int fd, int id){
 		perror("write");
 }
 
+/**
+ * removes char @param garbage from str
+ * Usage: str will continue to point to the start of the (altered) input string!
+ */
+static void removeChar(char *str, char garbage) {
+	
+	char *src, *dst;
+	for (src = dst = str; *src != '\0'; src++) {
+		*dst = *src;
+		if (*dst != garbage) dst++;
+	}
+	*dst = '\0';
+}
+
+/**
+ * input during program
+ */
 int handle_keyb(int fd){
 
-	char cmd [20] = {0};
+	char cmd [26] = {0};
 	int i;
 	unsigned int mask;
 	unsigned int value;
+	
 
-	if (read(0, cmd, 19) > strlen("+123456\n"))
+	if (read(0, cmd, 25) > strlen("d00.FF.FF.FF.FF.FF.FF.FF\n"))
 		return 1; /* ignore */
 
 	if (strlen(cmd) > 0)
@@ -471,9 +500,19 @@ int handle_keyb(int fd){
 			color = 1;
 
 		break;
+	case 'd':
+		//remove the dots in between the bytes of the mask
+		removeChar(cmd+1, '.');
+		//parse for valid mask
+		if (((int)strlen(cmd+1)) < 16)
+			break; //ignore invalid data
+			
+		sscanf(&cmd[1], "%llX", (unsigned long long int*)&data_mask);
+		notch = 1;
+		break;
 
 	case '#' :
-		notch = 1;
+		//notch = 1;
 		break;
 
 	case '*' :
@@ -546,9 +585,17 @@ int handle_timeo(int fd, long currcms){
 		clearscreen = 0;
 	}
 
+	//set marked data as notch filter
+// 	if (notch) {
+// 		for (i=0; i < 2048; i++)
+// 			U64_DATA(&sniftab[i].notch) |= U64_DATA(&sniftab[i].marker);
+// 		notch = 0;
+// 	}
+	
+	//set data mask as notch filter
 	if (notch) {
 		for (i=0; i < 2048; i++)
-			U64_DATA(&sniftab[i].notch) |= U64_DATA(&sniftab[i].marker);
+			U64_DATA(&sniftab[i].notch) = data_mask;
 		notch = 0;
 	}
 
@@ -591,6 +638,97 @@ int handle_timeo(int fd, long currcms){
 
 };
 
+enum periodicity {
+	E_PERIOD_10MS,
+	E_PERIOD_50MS,
+	E_PERIOD_100MS,
+	E_PERIOD_250MS,
+	E_PERIOD_500MS,
+	E_PERIOD_750MS,
+	E_PERIOD_1S,
+	E_PERIOD_STATIC,
+};
+
+static enum periodicity analyze_time(long diffsec, long diffusec) {
+	
+	
+	if (diffsec == 0 && diffusec != 0) {
+		//fast loops
+		if (diffsec < 11000)
+			return E_PERIOD_10MS;
+		else if (diffsec < 51000)
+			return E_PERIOD_50MS;
+		else if (diffsec < 101000)
+			return E_PERIOD_100MS;
+		else if (diffsec < 251000)
+			return E_PERIOD_250MS;
+		else if (diffsec < 501000)
+			return E_PERIOD_500MS;	
+		else if (diffsec < 751000)
+			return E_PERIOD_750MS;
+	} else if (diffusec != 0) {
+		//slow loop
+		if (diffsec > 1)
+			return E_PERIOD_STATIC;
+		return E_PERIOD_1S;
+	}
+	
+	//static data
+	return E_PERIOD_STATIC;
+}
+
+static char* setColor(enum periodicity period) {
+// 	#define FGBLACK   "\33[30m"
+// 	#define FGRED     "\33[31m"
+// 	#define FGGREEN   "\33[32m"
+// 	#define FGYELLOW  "\33[33m"
+// 	#define FGBLUE    "\33[34m"
+// 	#define FGMAGENTA "\33[35m"
+// 	#define FGCYAN    "\33[36m"
+// 	#define FGWHITE   "\33[37m"
+// 	
+// 	#define BGBLACK   "\33[40m"
+// 	#define BGRED     "\33[41m"
+// 	#define BGGREEN   "\33[42m"
+// 	#define BGYELLOW  "\33[43m"
+// 	#define BGBLUE    "\33[44m"
+// 	#define BGMAGENTA "\33[45m"
+// 	#define BGCYAN    "\33[46m"
+// 	#define BGWHITE   "\33[47m"
+	
+#define COLOR_STATIC BGWHITE FGBLACK
+	
+	switch(period) {
+	case E_PERIOD_10MS:
+		return BGRED;
+		break;
+	case E_PERIOD_50MS:
+		return BGRED;
+		break;
+	case E_PERIOD_100MS:
+		return BGRED;
+		break;
+	case E_PERIOD_250MS:
+		return BGRED;
+		break;
+	case E_PERIOD_500MS:
+		return BGYELLOW;
+		break;
+	case E_PERIOD_750MS:
+		return BGYELLOW;
+		break;
+	case E_PERIOD_1S:
+		return BGYELLOW;
+		break;
+	case E_PERIOD_STATIC:
+		return COLOR_STATIC;
+		break;
+	}
+
+	return ATTRESET;
+}
+
+
 void print_snifline(int id){
 
 	long diffsec  = sniftab[id].currstamp.tv_sec  - sniftab[id].laststamp.tv_sec;
@@ -606,6 +744,8 @@ void print_snifline(int id){
 
 	if (diffsec > 10)
 		diffsec = 9, diffusec = 999999;
+	
+	char* status_color = setColor(analyze_time(diffsec, diffusec));
 
 	printf("%ld.%06ld  %3X  ", diffsec, diffusec, id);
 
