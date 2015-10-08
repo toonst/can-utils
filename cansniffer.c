@@ -507,6 +507,8 @@ int handle_keyb(int fd){
 		if (((int)strlen(cmd+1)) < 16)
 			break; //ignore invalid data
 			
+		//cut off overflow
+		cmd[17] = '\0';
 		sscanf(&cmd[1], "%llX", (unsigned long long int*)&data_mask);
 		notch = 1;
 		break;
