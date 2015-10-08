@@ -87,9 +87,9 @@
 
 /* time defaults */
 
-#define TIMEOUT 500 /* in 10ms */
-#define HOLD    100 /* in 10ms */
-#define LOOP     20 /* in 10ms */
+#define TIMEOUT (0)   /* in 10ms */
+#define HOLD    (100) /* in 10ms */
+#define LOOP    (20)  /* in 10ms */
 
 #define ATTCOLOR ATTBOLD FGRED
 
@@ -119,7 +119,7 @@ static long hold = HOLD;
 static long loop = LOOP;
 static unsigned char binary;
 static unsigned char binary_gap;
-static unsigned char color;
+static unsigned char color = 1;
 static char *interface;
 static uint64_t data_mask;
 
