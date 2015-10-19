@@ -88,13 +88,14 @@
 /* time defaults */
 
 #define TIMEOUT (0)   /* in 10ms */
-#define HOLD    (100) /* in 10ms */
+#define HOLD    (1000) /* in 10ms */
 #define LOOP    (20)  /* in 10ms */
 
 #define ATTCOLOR ATTBOLD FGRED
 
 #define STARTLINESTR "XX delta   ID  data ... "
 
+#define BUFSIZE 2048
 struct snif {
 	int flags;
 	long hold;
@@ -105,7 +106,7 @@ struct snif {
 	struct can_frame current;
 	struct can_frame marker;
 	struct can_frame notch;
-} sniftab[2048];
+} sniftab[BUFSIZE];
 
 
 extern int optind, opterr, optopt;
@@ -212,7 +213,7 @@ int main(int argc, char **argv)
 	signal(SIGHUP, sigterm);
 	signal(SIGINT, sigterm);
 
-	for (i=0; i < 2048 ;i++) /* default: check all CAN-IDs */
+	for (i=0; i < BUFSIZE ;i++) /* default: check all CAN-IDs */
 		do_set(i, ENABLE);
 
 	while ((opt = getopt(argc, argv, "m:v:r:t:h:l:qbBcf?")) != -1) {
@@ -278,7 +279,7 @@ int main(int argc, char **argv)
 	}
 	
 	if (mask || value) {
-		for (i=0; i < 2048 ;i++) {
+		for (i=0; i < BUFSIZE ;i++) {
 			if ((i & mask) ==  (value & mask))
 				do_set(i, ENABLE);
 			else
@@ -287,7 +288,7 @@ int main(int argc, char **argv)
 	}
 
 	if (quiet)
-		for (i=0; i < 2048 ;i++)
+		for (i=0; i < BUFSIZE ;i++)
 			do_clr(i, ENABLE);
 
 	if (strlen(argv[optind]) >= IFNAMSIZ) {
@@ -321,7 +322,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	for (i=0; i < 2048 ;i++) /* initial BCM setup */
+	for (i=0; i < BUFSIZE ;i++) /* initial BCM setup */
 		if (is_set(i, ENABLE))
 			rx_setup(s, i);
 
@@ -446,7 +447,7 @@ int handle_keyb(int fd){
 			mask = 0x7FF;
 
 		if (cmd[0] == '+') {
-			for (i=0; i < 2048 ;i++) {
+			for (i=0; i < BUFSIZE ;i++) {
 				if (((i & mask) == (value & mask)) && (is_clr(i, ENABLE))) {
 					do_set(i, ENABLE);
 					rx_setup(fd, i);
@@ -454,7 +455,7 @@ int handle_keyb(int fd){
 			}
 		}
 		else { /* '-' */
-			for (i=0; i < 2048 ;i++) {
+			for (i=0; i < BUFSIZE ;i++) {
 				if (((i & mask) == (value & mask)) && (is_set(i, ENABLE))) {
 					do_clr(i, ENABLE);
 					rx_delete(fd, i);
@@ -518,7 +519,7 @@ int handle_keyb(int fd){
 		break;
 
 	case '*' :
-		for (i=0; i < 2048; i++)
+		for (i=0; i < BUFSIZE; i++)
 			U64_DATA(&sniftab[i].notch) = (__u64) 0;
 		break;
 
@@ -589,14 +590,14 @@ int handle_timeo(int fd, long currcms){
 
 	//set marked data as notch filter
 // 	if (notch) {
-// 		for (i=0; i < 2048; i++)
+// 		for (i=0; i < BUFSIZE; i++)
 // 			U64_DATA(&sniftab[i].notch) |= U64_DATA(&sniftab[i].marker);
 // 		notch = 0;
 // 	}
 	
 	//set data mask as notch filter
 	if (notch) {
-		for (i=0; i < 2048; i++)
+		for (i=0; i < BUFSIZE; i++)
 			U64_DATA(&sniftab[i].notch) = data_mask;
 		notch = 0;
 	}
@@ -605,7 +606,7 @@ int handle_timeo(int fd, long currcms){
 	printf("%02d\n", frame_count++); /* rolling display update counter */
 	frame_count %= 100;
 
-	for (i=0; i < 2048; i++) {
+	for (i=0; i < BUFSIZE; i++) {
 
 		if is_set(i, ENABLE) {
 
@@ -708,10 +709,10 @@ static char* setColor(enum periodicity period) {
 		return BGRED;
 		break;
 	case E_PERIOD_100MS:
-		return BGRED;
+		return BGGREEN;
 		break;
 	case E_PERIOD_250MS:
-		return BGRED;
+		return BGGREEN;
 		break;
 	case E_PERIOD_500MS:
 		return BGYELLOW;
@@ -720,7 +721,7 @@ static char* setColor(enum periodicity period) {
 		return BGYELLOW;
 		break;
 	case E_PERIOD_1S:
-		return BGYELLOW;
+		return BGCYAN;
 		break;
 	case E_PERIOD_STATIC:
 		return COLOR_STATIC;
@@ -833,7 +834,7 @@ void writesettings(char* name){
     
 	if (fd > 0) {
 
-		for (i=0; i < 2048 ;i++) {
+		for (i=0; i < BUFSIZE ;i++) {
 			sprintf(buf, "<%03X>%c.", i, (is_set(i, ENABLE))?'1':'0');
 			write_size = write(fd, buf, 7);
 			for (j=0; j<8 ; j++){
@@ -865,7 +866,7 @@ void readsettings(char* name, int sockfd){
 		if (!sockfd)
 			printf("reading setting file '%s' ... ", fname);
 
-		for (i=0; i < 2048 ;i++) {
+		for (i=0; i < BUFSIZE ;i++) {
 			if (read(fd, &buf, 24) == 24) {
 				if (buf[5] & 1) {
 					if (is_clr(i, ENABLE)) {
