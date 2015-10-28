@@ -84,6 +84,32 @@
 #define MAGENTA ATTBOLD FGMAGENTA
 #define CYAN    ATTBOLD FGCYAN
 
+#define ATTCOLOR RED
+
+
+#define U64_DATA(p) (*(unsigned long long*)(p)->data)
+#define BUFSIZE 2048
+
+
+/* flags */
+
+#define ENABLE  1 /* by filter or user */
+#define DISPLAY 2 /* is on the screen */
+#define UPDATE  4 /* needs to be printed on the screen */
+#define CLRSCR  8 /* clear screen in next loop */
+
+/* flags testing & setting */
+#define is_set(id, flag) (sniftab[id].flags & flag)
+#define is_clr(id, flag) (!(sniftab[id].flags & flag))
+
+#define do_set(id, flag) (sniftab[id].flags |= flag)
+#define do_clr(id, flag) (sniftab[id].flags &= ~flag)
+
+
+/* time defaults */
+#define LOOP    (10)  /* in 10ms */
+
+
 const char col_on [MAXCOL][19] = {BLUE, RED, GREEN, BOLD, MAGENTA, CYAN};
 const char col_off [] = ATTRESET;
 
@@ -93,6 +119,7 @@ static __u32 last_dropcnt[MAXSOCK];
 static char devname[MAXIFNAMES][IFNAMSIZ+1];
 static int  dindex[MAXIFNAMES];
 static int  max_devname_len; /* to prevent frazzled device name output */ 
+static long loop = LOOP;
 const int canfd_on = 1;
 
 #define MAXANI 4
@@ -103,7 +130,17 @@ extern int optind, opterr, optopt;
 
 static volatile int running = 1;
 
-//static struct timeval canID_last_timeval[0x7FF];
+struct snif {
+	int flags;
+	long hold;
+	long timeout;
+	long id;
+	struct timeval laststamp;
+	struct timeval currstamp;
+	struct can_frame last;
+	struct can_frame current;
+	struct can_frame marker;
+} sniftab[BUFSIZE];
 
 void print_usage(char *prg)
 {
@@ -152,6 +189,154 @@ void sigterm(int signo)
 {
 	running = 0;
 }
+
+void store_frame(struct can_frame* frame, struct timeval currcms){
+	
+	int id;
+		
+	id = frame->can_id & (CAN_ERR_MASK|CAN_ERR_FLAG);
+	
+	++sniftab[id].id;
+	
+	memcpy(&sniftab[id].last, &sniftab[id].current, sizeof(struct can_frame));
+	memcpy(&sniftab[id].current, frame, sizeof(struct can_frame));
+	
+	U64_DATA(&sniftab[id].marker) |= 
+	U64_DATA(&sniftab[id].current) ^ U64_DATA(&sniftab[id].last);
+	
+	sniftab[id].laststamp = sniftab[id].currstamp;
+	sniftab[id].currstamp = currcms;
+
+	do_set(id, UPDATE);
+};
+
+enum periodicity {
+	E_PERIOD_10MS,
+	E_PERIOD_50MS,
+	E_PERIOD_100MS,
+	E_PERIOD_250MS,
+	E_PERIOD_500MS,
+	E_PERIOD_750MS,
+	E_PERIOD_1S,
+	E_PERIOD_STATIC,
+};
+
+static enum periodicity analyze_time(long diffsec, long diffusec) {
+
+	if (diffsec == 0 && diffusec != 0) {
+		//fast loops
+		if (diffusec < 11000)
+			return E_PERIOD_10MS;
+		else if (diffusec < 51000)
+			return E_PERIOD_50MS;
+		else if (diffusec < 101000)
+			return E_PERIOD_100MS;
+		else if (diffusec < 251000)
+			return E_PERIOD_250MS;
+		else if (diffusec < 501000)
+			return E_PERIOD_500MS;
+		else if (diffusec >= 501000)
+			return E_PERIOD_750MS;
+	} else if (diffsec != 0) {
+		//slow loop
+		if (diffsec > 1)
+			return E_PERIOD_STATIC;
+		return E_PERIOD_1S;
+	}
+
+	//static data
+	return E_PERIOD_STATIC;
+}
+
+static char* setColor(enum periodicity period) {
+
+	#define COLOR_STATIC BGWHITE FGBLACK
+
+	switch(period) {
+		case E_PERIOD_10MS:
+			return BGRED;
+			break;
+		case E_PERIOD_50MS:
+			return BGRED;
+			break;
+		case E_PERIOD_100MS:
+			return BGGREEN;
+			break;
+		case E_PERIOD_250MS:
+			return BGGREEN;
+			break;
+		case E_PERIOD_500MS:
+			return BGYELLOW;
+			break;
+		case E_PERIOD_750MS:
+			return BGYELLOW;
+			break;
+		case E_PERIOD_1S:
+			return BGCYAN;
+			break;
+		case E_PERIOD_STATIC:
+			return COLOR_STATIC;
+			break;
+	}
+	
+	return ATTRESET;
+}
+
+void print_snifline(int id){
+
+	long diffsec  = sniftab[id].currstamp.tv_sec  - sniftab[id].laststamp.tv_sec;
+	long diffusec = sniftab[id].currstamp.tv_usec - sniftab[id].laststamp.tv_usec;
+	int dlc_diff  = sniftab[id].last.can_dlc - sniftab[id].current.can_dlc;
+	int i;
+
+	if (diffusec < 0)
+		diffsec--, diffusec += 1000000;
+
+	if (diffsec < 0)
+		diffsec = diffusec = 0;
+
+	if (diffsec > 10)
+		diffsec = 9, diffusec = 999999;
+
+	char* status_color = setColor(analyze_time(diffsec, diffusec));
+	
+	printf("%5ld ",sniftab[id].id);
+
+	printf("%s%ld.%06ld  %3X  ",status_color , diffsec, diffusec, id);
+
+	//print byte by byte
+	for (i=0; i<sniftab[id].current.can_dlc; i++)
+		if (sniftab[id].marker.data[i])
+			printf("%s%s%02X %s", status_color, ATTCOLOR, sniftab[id].current.data[i], ATTRESET);
+		else
+			printf("%s%02X %s", status_color, sniftab[id].current.data[i], ATTRESET);
+		
+		if (sniftab[id].current.can_dlc < 8)
+			printf("%*s", (8 - sniftab[id].current.can_dlc) * 3, "");
+		
+		for (i=0; i<sniftab[id].current.can_dlc; i++)
+			if ((sniftab[id].current.data[i] > 0x1F) && 
+				(sniftab[id].current.data[i] < 0x7F))
+				if (sniftab[id].marker.data[i])
+					printf("%s%c%s", ATTCOLOR, sniftab[id].current.data[i], ATTRESET);
+				else
+					putchar(sniftab[id].current.data[i]);
+				else
+					putchar('.');
+				
+				/*
+				 * when the can_dlc decreased (dlc_diff > 0),
+				 * we need to blank the former data printout
+				 */
+				for (i=0; i<dlc_diff; i++)
+					putchar(' ');
+
+	putchar('\n');
+
+	//reset stdout color to default
+	printf("%s", ATTRESET);
+
+};
 
 int idx2dindex(int ifidx, int socket) {
 
@@ -202,10 +387,6 @@ int idx2dindex(int ifidx, int socket) {
 	return i;
 }
 
-/*getTimeDifferenceOfFrame(&frame) {
-	canID_last_timeval[frame->can_id & (CAN_ERR_MASK|CAN_ERR_FLAG)] = 
-}*/
-
 int main(int argc, char **argv)
 {
 	fd_set rdfs;
@@ -214,7 +395,7 @@ int main(int argc, char **argv)
 	useconds_t bridge_delay = 0;
 	unsigned char timestamp = 0;
 	unsigned char dropmonitor = 0;
-	unsigned char extra_msg_info = 0;
+	//unsigned char extra_msg_info = 0;
 	unsigned char silent = SILENT_INI;
 	unsigned char silentani = 0;
 	unsigned char color = 0;
@@ -234,6 +415,7 @@ int main(int argc, char **argv)
 	struct cmsghdr *cmsg;
 	struct can_filter *rfilter;
 	can_err_mask_t err_mask;
+	struct can_frame normalCanFrame;
 	struct canfd_frame frame;
 	int nbytes, i, maxdlen;
 	struct ifreq ifr;
@@ -340,7 +522,7 @@ int main(int argc, char **argv)
 			break;
 
 		case 'x':
-			extra_msg_info = 1;
+			//extra_msg_info = 1;
 			break;
 
 		case 'L':
@@ -619,12 +801,41 @@ int main(int argc, char **argv)
 	msg.msg_iov = &iov;
 	msg.msg_iovlen = 1;
 	msg.msg_control = &ctrlmsg;
+	
+	long currcms = 0;
+	long lastcms = 0;
+	struct timeval new_tv, start_tv;
+	
+	gettimeofday(&start_tv, NULL);
+	
+	printf("%s", CSR_HIDE); /* hide cursor */
 
+	printf("%s%s", CLR_SCREEN, CSR_HOME);
+	
 	while (running) {
 
 		FD_ZERO(&rdfs);
 		for (i=0; i<currmax; i++)
 			FD_SET(s[i], &rdfs);
+		
+		//update time
+		gettimeofday(&new_tv, NULL);
+		currcms = (new_tv.tv_sec - start_tv.tv_sec) * 100 + (new_tv.tv_usec / 10000);
+		
+		//print
+		if (currcms - lastcms >= loop) {
+			lastcms = currcms;
+			printf("%s", CSR_HOME);
+			printf("    # period_s   ID                   <DATA>  <ASCII>\n");
+			
+			for (i=0; i < BUFSIZE; ++i) {
+				if is_set(i, UPDATE) {
+					print_snifline(i);
+				}
+				
+				//do_clr(i, UPDATE);
+			}
+		}
 		
 
 		if (timeout_current)
@@ -741,7 +952,7 @@ int main(int argc, char **argv)
 					goto out_fflush; /* no other output to stdout */
 				}
 		      
-				printf(" %s", (color>2)?col_on[idx%MAXCOL]:"");
+				//printf(" %s", (color>2)?col_on[idx%MAXCOL]:"");
 
 				switch (timestamp) {
 
@@ -783,7 +994,14 @@ int main(int argc, char **argv)
 				default: /* no timestamp output */
 					break;
 				}
-
+				
+				normalCanFrame.can_id = frame.can_id;
+				normalCanFrame.can_dlc = frame.len;
+				memcpy(&normalCanFrame.data, &frame.data, 8);
+				store_frame(&normalCanFrame, new_tv);
+				continue;
+				
+				/*
 				printf(" %s", (color && (color<3))?col_on[idx%MAXCOL]:"");
 				printf("%*s", max_devname_len, devname[idx]);
 
@@ -794,20 +1012,25 @@ int main(int argc, char **argv)
 					else
 						printf ("  RX %s", extra_m_info[frame.flags & 3]);
 				}
+				
+				
 
 				printf("%s  ", (color==1)?col_off:"");
 
-				//TODO 
 				fprint_long_canframe(stdout, &frame, NULL, view, maxdlen);
 
 				printf("%s", (color>1)?col_off:"");
-				printf("\n");
+				printf("\n");*/
+				
+				
 			}
 
 		out_fflush:
 			fflush(stdout);
 		}
 	}
+	
+	printf("%s", CSR_SHOW); /* show cursor */
 
 	for (i=0; i<currmax; i++)
 		close(s[i]);
