@@ -49,6 +49,8 @@ other_tools/slcanpty
 
 /can-utils-*.tar.bz2
 /can-utils-*.tar.gz
-can_sniffer_v2
+can_sniffer/can_sniffer_v2
+
+can_viewer/can_viewer
 
 other_tools/config/
