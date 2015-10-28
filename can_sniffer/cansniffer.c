@@ -88,8 +88,8 @@
 /* time defaults */
 
 #define TIMEOUT (0)   /* in 10ms */
-#define HOLD    (1000) /* in 10ms */
-#define LOOP    (20)  /* in 10ms */
+#define HOLD    (250) /* in 10ms */
+#define LOOP    (10)  /* in 10ms */
 
 #define ATTCOLOR ATTBOLD FGRED
 
@@ -100,6 +100,7 @@ struct snif {
 	int flags;
 	long hold;
 	long timeout;
+	long id;
 	struct timeval laststamp;
 	struct timeval currstamp;
 	struct can_frame last;
@@ -559,6 +560,7 @@ int handle_bcm(int fd, long currcms){
 		return 0; /* quit */
 	}
 
+	++sniftab[id].id;
 	sniftab[id].current = bmsg.frame;
 	U64_DATA(&sniftab[id].marker) |= 
 		U64_DATA(&sniftab[id].current) ^ U64_DATA(&sniftab[id].last);
@@ -750,6 +752,7 @@ void print_snifline(int id){
 	
 	char* status_color = setColor(analyze_time(diffsec, diffusec));
 
+	printf("%4ld ",sniftab[id].id);
 	printf("%s%ld.%06ld  %3X  ",status_color , diffsec, diffusec, id);
 
 	if (binary) {
