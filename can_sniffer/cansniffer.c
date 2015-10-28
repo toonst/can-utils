@@ -659,19 +659,19 @@ static enum periodicity analyze_time(long diffsec, long diffusec) {
 	
 	if (diffsec == 0 && diffusec != 0) {
 		//fast loops
-		if (diffsec < 11000)
+		if (diffusec < 11000)
 			return E_PERIOD_10MS;
-		else if (diffsec < 51000)
+		else if (diffusec < 51000)
 			return E_PERIOD_50MS;
-		else if (diffsec < 101000)
+		else if (diffusec < 101000)
 			return E_PERIOD_100MS;
-		else if (diffsec < 251000)
+		else if (diffusec < 251000)
 			return E_PERIOD_250MS;
-		else if (diffsec < 501000)
+		else if (diffusec < 501000)
 			return E_PERIOD_500MS;	
-		else if (diffsec < 751000)
+		else if (diffusec < 751000)
 			return E_PERIOD_750MS;
-	} else if (diffusec != 0) {
+	} else if (diffsec != 0) {
 		//slow loop
 		if (diffsec > 1)
 			return E_PERIOD_STATIC;
@@ -752,7 +752,7 @@ void print_snifline(int id){
 	
 	char* status_color = setColor(analyze_time(diffsec, diffusec));
 
-	printf("%4ld ",sniftab[id].id);
+	printf("%5ld ",sniftab[id].id);
 	printf("%s%ld.%06ld  %3X  ",status_color , diffsec, diffusec, id);
 
 	if (binary) {
