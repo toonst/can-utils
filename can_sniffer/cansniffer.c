@@ -93,7 +93,7 @@
 
 #define ATTCOLOR ATTBOLD FGRED
 
-#define STARTLINESTR "XX delta   ID  data ... "
+#define STARTLINESTR "         delta   ID  data ... "
 
 #define BUFSIZE 2048
 struct snif {
@@ -122,6 +122,7 @@ static long loop = LOOP;
 static unsigned char binary;
 static unsigned char binary_gap;
 static unsigned char color = 1;
+static unsigned long can_player_loop_time_ms;
 static char *interface;
 static uint64_t data_mask;
 
@@ -184,6 +185,7 @@ void print_usage(char *prg)
 	fprintf(stderr, "         -t <time>  (timeout for ID display [x10ms] default: %d, 0 = OFF)\n", TIMEOUT);
 	fprintf(stderr, "         -h <time>  (hold marker on changes [x10ms] default: %d)\n", HOLD);
 	fprintf(stderr, "         -l <time>  (loop time (display) [x10ms] default: %d)\n", LOOP);
+	fprintf(stderr, "         -p <time>  (can player loop time (display) [ms] default: 0 = OFF)\n");
 	fprintf(stderr, "Use interface name '%s' to receive from all can-interfaces\n", ANYDEV);
 	fprintf(stderr, "\n");
 	fprintf(stderr, "%s", manual);
@@ -217,7 +219,7 @@ int main(int argc, char **argv)
 	for (i=0; i < BUFSIZE ;i++) /* default: check all CAN-IDs */
 		do_set(i, ENABLE);
 
-	while ((opt = getopt(argc, argv, "m:v:r:t:h:l:qbBcf?")) != -1) {
+	while ((opt = getopt(argc, argv, "m:v:r:t:h:l:p:qbBcf?")) != -1) {
 		switch (opt) {
 		case 'm':
 			sscanf(optarg, "%x", &mask);
@@ -241,6 +243,10 @@ int main(int argc, char **argv)
 
 		case 'l':
 			sscanf(optarg, "%ld", &loop);
+			break;
+			
+		case 'p':
+			sscanf(optarg, "%ld", &can_player_loop_time_ms);
 			break;
 
 		case 'q':
@@ -579,7 +585,7 @@ int handle_timeo(int fd, long currcms){
 
 	int i;
 	int force_redraw = 0;
-	static unsigned int frame_count;
+	static unsigned long frame_count;
 
 	if (clearscreen) {
 		char startline[80];
@@ -605,8 +611,14 @@ int handle_timeo(int fd, long currcms){
 	}
 
 	printf("%s", CSR_HOME);
-	printf("%02d\n", frame_count++); /* rolling display update counter */
-	frame_count %= 100;
+	++frame_count;
+	
+	long running_time_ms = frame_count * loop * 10;
+	
+	if (can_player_loop_time_ms)
+		running_time_ms %= can_player_loop_time_ms;
+	
+	printf("%3ld.%3ld\n", running_time_ms / 1000, running_time_ms % 1000); //(total ms)
 
 	for (i=0; i < BUFSIZE; i++) {
 
