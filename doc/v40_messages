@@ -1,0 +1,45 @@
+CAN messages
+
+rem:
+id 55   xx xx xx x3 6x xx xx xx  # ingedrukt
+id 55   xx xx xx x2 2x xx xx xx  # los
+
+id f5   xx xx xx Bx xx xx xx xx  # ingedrukt
+id f5   xx xx xx 7x xx xx xx xx  # los
+
+id 1B0  xx vv xx xx xx xx vv xx  # waarde
+
+cruise control:
+id 10   xx xx xx xx xx xx xx 8x  # plus
+id 72   xx xx xx xx xx 8x xx xx  # plus (inverted)
+                                 
+id 10   xx xx xx xx xx xx x1 xx  # minus
+id 72   xx xx xx xx x1 xx xx xx  # minus (inverted)
+                                 
+id 10   xx xx xx xx xx xx xx 1x  # nul
+id 72   xx xx xx xx xx 1x xx xx  # nul (inverted)
+                                 
+id 10   xx xx xx xx xx xx xx 2x  # arrow
+id 72   xx xx xx xx xx 2x xx xx  # arrow (inverted)
+                                 
+id 10   xx xx xx xx xx xx xx x4  # cc on
+id 72   xx xx xx xx xx x4 xx xx  # cc on (inverted)
+                                 
+id 1D0  Ax xx xx xx xx xx xx xx  # limit pressed 
+id 1D0  6x xx xx xx xx xx xx xx  # limit depressed
+                                 
+                                 
+koppeling:                       
+id 145  xx xx cx xx xx xx xx xx  # halfway pressed
+id 145  xx xx 4x xx xx xx xx xx  # not halfway pressed
+                                 
+id 2C0  xx xx xx vv vv xx xx xx  # value 0000 - 03D9
+                                 
+versnellingspook:                
+id 2B5  xx xx xx Bx xx xx xx xx  # neutral
+id 2B5  xx xx xx 9x xx xx xx xx  # not neutral
+
+handrem:
+id 2A9  xx xx xx xx 4x xx xx xx  # on
+
+
