@@ -1,0 +1,24 @@
+<file>
+	<name>engine_start_5s.log</name>
+	<total_time>10876</total_time>
+</file>
+
+<file>
+	<name>engine_start_echt_6s.log</name>
+	<total_time>9997</total_time>
+</file>
+
+<file>
+	<name>linker_voorruit_5s.log</name>
+	<total_time>15030</total_time>
+</file>
+
+<file>
+	<name>nummerkes_5s.log</name>
+	<total_time>21400</total_time>
+</file>
+
+<file>
+	<name>vier_pinkers_aanuit_5s.log</name>
+	<total_time>12581</total_time>
+</file>
