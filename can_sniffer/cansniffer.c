@@ -126,6 +126,7 @@ static long loop = LOOP;
 static unsigned char binary;
 static unsigned char binary_gap;
 static unsigned char color = 1;
+static unsigned char bg_color = 1;
 static unsigned long can_player_loop_time_ms;
 static char *interface;
 static uint64_t data_mask;
@@ -789,6 +790,9 @@ void print_snifline(int id){
 		diffsec = 9, diffusec = 999999;
 	
 	char* status_color = setColor(analyze_time(diffsec, diffusec));
+	
+	if (!bg_color)
+		status_color = ATTRESET;
 
 	printf("%5ld ",sniftab[id].id);
 	printf("%s%ld.%06ld  %3X  ",status_color , diffsec, diffusec, id);
