@@ -88,7 +88,7 @@
 /* time defaults */
 
 #define TIMEOUT (0)   /* in 10ms */
-#define HOLD    (250) /* in 10ms */
+#define HOLD    (50) /* in 10ms */
 #define LOOP    (10)  /* in 10ms */
 
 #define ATTCOLOR ATTBOLD FGRED
@@ -109,6 +109,10 @@ struct snif {
 	struct can_frame notch;
 } sniftab[BUFSIZE];
 
+enum e_endianess {
+	E_LITTLE_ENDIAN,
+	E_BIG_ENDIAN,
+};
 
 extern int optind, opterr, optopt;
 
@@ -125,6 +129,7 @@ static unsigned char color = 1;
 static unsigned long can_player_loop_time_ms;
 static char *interface;
 static uint64_t data_mask;
+static enum e_endianess endian;
 
 void rx_setup (int fd, int id);
 void rx_delete (int fd, int id);
@@ -134,6 +139,8 @@ int handle_bcm(int fd, long currcms);
 int handle_timeo(int fd, long currcms);
 void writesettings(char* name);
 void readsettings(char* name, int sockfd);
+enum e_endianess getEndianess();
+uint64_t swap_uint64(uint64_t val);
 
 /**
  * HELP AT RUNTIME
@@ -196,6 +203,14 @@ void sigterm(int signo)
 	running = 0;
 }
 
+enum e_endianess getEndianess() {
+	volatile uint32_t i=0x01234567;
+	// return 0 for big endian, 1 for little endian.
+	if ((*((uint8_t*)(&i))) == 0x67)
+		return E_LITTLE_ENDIAN;
+	return E_BIG_ENDIAN;
+}
+
 int main(int argc, char **argv)
 {
 	fd_set rdfs;
@@ -215,6 +230,8 @@ int main(int argc, char **argv)
 	signal(SIGTERM, sigterm);
 	signal(SIGHUP, sigterm);
 	signal(SIGINT, sigterm);
+	
+	endian = getEndianess();
 
 	for (i=0; i < BUFSIZE ;i++) /* default: check all CAN-IDs */
 		do_set(i, ENABLE);
@@ -424,6 +441,13 @@ static void removeChar(char *str, char garbage) {
 	*dst = '\0';
 }
 
+uint64_t swap_uint64( uint64_t val )
+{
+	val = ((val << 8) & 0xFF00FF00FF00FF00ULL ) | ((val >> 8) & 0x00FF00FF00FF00FFULL );
+	val = ((val << 16) & 0xFFFF0000FFFF0000ULL ) | ((val >> 16) & 0x0000FFFF0000FFFFULL );
+	return (val << 32) | (val >> 32);
+}
+
 /**
  * input during program
  */
@@ -518,6 +542,8 @@ int handle_keyb(int fd){
 		//cut off overflow
 		cmd[17] = '\0';
 		sscanf(&cmd[1], "%llX", (unsigned long long int*)&data_mask);
+		if (endian == E_LITTLE_ENDIAN)
+			data_mask = swap_uint64(data_mask);
 		notch = 1;
 		break;
 
