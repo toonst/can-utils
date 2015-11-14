@@ -127,6 +127,7 @@ static unsigned char binary;
 static unsigned char binary_gap;
 static unsigned char color = 1;
 static unsigned char bg_color = 1;
+static unsigned char learning = 0;
 static unsigned long can_player_loop_time_ms;
 static char *interface;
 static uint64_t data_mask;
@@ -155,6 +156,7 @@ void print_usage(char *prg)
 		"b<ENTER>         - toggle binary / HEX-ASCII output\n"
 		"B<ENTER>         - toggle binary with gap / HEX-ASCII output (exceeds 80 chars!)\n"
 		"c<ENTER>         - toggle color mode\n"
+		"a<ENTER>         - automatic learning, marked bits will form a notch filter\n"
 		"#<ENTER>         - notch currently marked/changed bits (can be used repeatedly)\n"
 		"*<ENTER>         - clear notched marked\n"
 		"rMYNAME<ENTER>   - read settings file (filter/notch)\n"
@@ -533,6 +535,13 @@ int handle_keyb(int fd){
 			color = 1;
 
 		break;
+	case 'a' :
+		if (learning)
+			learning = 0;
+		else
+			learning = 1;
+		
+		break;
 	case 'd':
 		//remove the dots in between the bytes of the mask
 		removeChar(cmd+1, '.');
@@ -595,8 +604,14 @@ int handle_bcm(int fd, long currcms){
 
 	++sniftab[id].id;
 	sniftab[id].current = bmsg.frame;
-	U64_DATA(&sniftab[id].marker) |= 
-		U64_DATA(&sniftab[id].current) ^ U64_DATA(&sniftab[id].last);
+
+	if (learning)
+		U64_DATA(&sniftab[id].notch) |= 
+			U64_DATA(&sniftab[id].current) ^ U64_DATA(&sniftab[id].last);
+	else
+		U64_DATA(&sniftab[id].marker) |= 
+			U64_DATA(&sniftab[id].current) ^ U64_DATA(&sniftab[id].last);
+	
 	sniftab[id].timeout = (timeout)?(currcms + timeout):0;
 
 	if (is_clr(id, DISPLAY))
@@ -617,18 +632,14 @@ int handle_timeo(int fd, long currcms){
 	if (clearscreen) {
 		char startline[80];
 		printf("%s%s", CLR_SCREEN, CSR_HOME);
-		snprintf(startline, 79, "< cansniffer %s # l=%ld h=%ld t=%ld >", interface, loop, hold, timeout);
+		if (learning)
+			snprintf(startline, 79, "< -LEARNING- %s # l=%ld h=%ld t=%ld >", interface, loop, hold, timeout);
+		else
+			snprintf(startline, 79, "< cansniffer %s # l=%ld h=%ld t=%ld >", interface, loop, hold, timeout);
 		printf("%s%*s",STARTLINESTR, 79-(int)strlen(STARTLINESTR), startline);
 		force_redraw = 1;
 		clearscreen = 0;
 	}
-
-	//set marked data as notch filter
-// 	if (notch) {
-// 		for (i=0; i < BUFSIZE; i++)
-// 			U64_DATA(&sniftab[i].notch) |= U64_DATA(&sniftab[i].marker);
-// 		notch = 0;
-// 	}
 	
 	//set data mask as notch filter
 	if (notch) {
