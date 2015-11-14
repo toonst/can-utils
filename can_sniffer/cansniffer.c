@@ -841,7 +841,7 @@ void print_snifline(int id){
 	else {
 		//print byte by byte
 		for (i=0; i<sniftab[id].current.can_dlc; i++)
-			if ((color) && (sniftab[id].marker.data[i]) && (!(sniftab[id].notch.data[i])))
+			if ((color) && (sniftab[id].marker.data[i] & ~(sniftab[id].notch.data[i])) )
 				printf("%s%s%02X %s", status_color, ATTCOLOR, sniftab[id].current.data[i], ATTRESET);
 			else
 				printf("%s%02X %s", status_color, sniftab[id].current.data[i], ATTRESET);
